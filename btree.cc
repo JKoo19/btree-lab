@@ -446,13 +446,13 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
      ERROR_T rc;
      SIZE_T offset;
      KEY_T currKey;
-     SIZE_T ptr;
+     // SIZE_T currPtr;
      KEY_T oldKey;
      VALUE_T oldValue;
      SIZE_T oldPtr;
      SIZE_T target;
 
-     rc - b.Unserialize(buffercache);
+     rc = b.Unserialize(buffercache, node);
 
      // Initialize our new node that we want to insert
      BTreeNode newNode = b;
@@ -467,21 +467,21 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
      // runs if statement if we want to put it inside the left node
      if (key < oldKey) {
        newNode.info.numkeys = b.info.numkeys - splitLoc;
-       for (nOffset = splitLoc; nOffset < b.info.numkeys; nOffset++) {
+       for (offset = splitLoc; offset < b.info.numkeys; offset++) {
          // Transfer the Key
-         rc = b.GetKey(nOffset, oldKey);
+         rc = b.GetKey(offset, oldKey);
          if (rc) { return rc; }
-         rc = newNode.SetKey((nOffset-splitLoc), oldKey);
+         rc = newNode.SetKey((offset-splitLoc), oldKey);
          if (rc) { return rc; }
          // Transfer the Ptr
-         rc = b.GetPtr(nOffset, oldPtr);
+         rc = b.GetPtr(offset, oldPtr);
          if (rc) { return rc; }
-         rc = newNode.setPtr((nOffset-splitLoc), oldPtr);
+         rc = newNode.SetPtr((offset-splitLoc), oldPtr);
          if (rc) { return rc; }
          // update the next Ptr
-         rc. b.getPtr(nOffset+1, oldPtr);
+         rc = b.GetPtr(offset+1, oldPtr);
          if (rc) { return rc; }
-         rc = newNode.setPtr((nOffset-splitLoc+1), oldPtr);
+         rc = newNode.SetPtr((offset-splitLoc+1), oldPtr);
          if (rc) { return rc; }
        }
        // Insert the new right node
@@ -490,10 +490,10 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
        b.info.numkeys = splitLoc;
 
        // Now we want to add the promoted node from below into the new split
-       for (offest = 0; offset < b.info.numkeys; offset--) {
+       for (offset = 0; offset < b.info.numkeys; offset--) {
          rc = b.GetKey(offset, currKey);
          if (rc) { return rc; }
-         if (key < thiskey) {
+         if (key < currKey) {
            break;
          }
        }
@@ -502,9 +502,9 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
        // but we need to shift everything after the target location
        b.info.numkeys += 1;
        target = offset;
-       for (offest = b.info.numkeys-1; offset > target; offest--) {
+       for (offset = b.info.numkeys-1; offset > target; offset--) {
          // Shift the key
-         rc = b.GetKey(offest-1, oldKey);
+         rc = b.GetKey(offset-1, oldKey);
          if (rc) { return rc; }
          rc = b.SetKey(offset, oldKey);
          if (rc) { return rc; }
@@ -528,7 +528,7 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
 
        // We need to account for edge case where inserted key is largest key
        // in the left node
-       KEY_T insertKey
+       KEY_T insertKey;
        rc = b.GetKey(b.info.numkeys-1, insertKey);
        if (rc) { return rc; }
        if (insertKey == key) {
@@ -536,14 +536,14 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
          newNode.SetPtr(0, right);
          newNode.Serialize(buffercache, newRightNode);
        }
-       b.GetKey(b.info.numkeys-1, key)
+       b.GetKey(b.info.numkeys-1, key);
        left = node;
        right = newRightNode;
        b.info.numkeys--;
        return b.Serialize(buffercache, node);
      } else { // new key should be in the right after the split
        newNode.info.numkeys = b.info.numkeys - splitLoc - 1;
-       temp = splitLoc + 1;
+       SIZE_T temp = splitLoc + 1;
        // write the new left node since it's the same
        for (offset = splitLoc+1; offset < b.info.numkeys; offset++) {
          rc = b.GetKey(offset, oldKey);
@@ -582,7 +582,7 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
          if (rc) { return rc; }
          rc = newNode.SetPtr(offset+1, oldPtr);
          if (rc) { return rc; }
-         rc = newNode.GetPtr(offset-1, oldptr);
+         rc = newNode.GetPtr(offset-1, oldPtr);
          if (rc) { return rc; }
          rc = newNode.SetPtr(offset, oldPtr);
          if (rc) { return rc; }
@@ -602,7 +602,7 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
        if (rc) { return rc; }
        right = newRightNode;
        left = node;
-       return newNode.Serialize(bufferchace, newRightNode);
+       return newNode.Serialize(buffercache, newRightNode);
     }
 }
 
@@ -664,7 +664,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
   VALUE_T oldValue;
   SIZE_T target;
   rc = b.Unserialize(buffercache, node);
-  
+
   // Create new root node, initialized to old root values
   BTreeNode root = b;
   // Create new interior node
@@ -672,7 +672,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
   BTreeNode newNode = b;
 
   // Get middle of old root, to be split into left and right
-  SIZE_T midpoint = b.info.numkeys/2; 
+  SIZE_T midpoint = b.info.numkeys/2;
   SIZE_T newLeft;
   SIZE_T newRight;
   rc = AllocateNode(newLeft);
@@ -682,13 +682,13 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
 
   // Find whether to put new key in left or right
   b.GetKey(midpoint, oldKey);
-  
+
   // Case 1: Key less than oldKey; key goes in left
   if (key < oldKey) {
     newNode.info.numkeys = b.info.numkeys - midpoint;
     // Set up right node: last half of original
     for (offset = midpoint; offset<b.info.numkeys; offset++) {
-      rc = b.GetKey(offset, oldKey); 
+      rc = b.GetKey(offset, oldKey);
       if (rc) {return rc;}
       rc = newNode.SetKey(offset-midpoint, oldKey);
       if (rc) {return rc;}
@@ -801,7 +801,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
       rc = newNode.GetPtr(offset-1, oldPtr);
       if (rc) {return rc;}
       rc = newNode.SetPtr(offset, oldPtr);
-      if (rc) {return rc;} 
+      if (rc) {return rc;}
     }
     // Insert key
     rc = newNode.SetKey(target, key);
