@@ -366,6 +366,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
     return ERROR_SIZE;
   }
 
+
   BTreeNode originalRoot;
   ERROR_T rc;
   SIZE_T offset;
@@ -379,9 +380,10 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
     return rc;
   }
 
-  if(Lookup(newKey, newValue)!=ERROR_NONEXISTENT){
-    return ERROR_CONFLICT;
-  }
+
+    if(Lookup(newKey, newValue)!=ERROR_NONEXISTENT){
+      return ERROR_CONFLICT;
+    }
 
   //Root is empty? Create left leaf with inserted val and right leaf for future use
   if(originalRoot.info.numkeys == 0){
@@ -405,19 +407,27 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
       return rc;
     }
     //empty right leaf
-    newleaf.Serialize(buffercache, rightNode);
+    rc = newleaf.Serialize(buffercache, rightNode);
+    if (rc) {return rc;}
     //now populate left leaf
     newleaf.info.numkeys = 1;
-    newleaf.SetKey(0, newKey);
-    newleaf.SetVal(0, newValue);
-    newleaf.Serialize(buffercache, leftNode);
+    rc = newleaf.SetKey(0, newKey);
+    if (rc) {return rc;}
+    rc = newleaf.SetVal(0, newValue);
+    if (rc) {return rc;}
+    rc = newleaf.Serialize(buffercache, leftNode);
+    if (rc) {return rc;}
     //now change root
     //So left node takes in keys/values less than OR EQUAL to current key
     originalRoot.info.numkeys = 1;
-    originalRoot.SetKey(0, newKey);
-    originalRoot.SetPtr(0, leftNode);
-    originalRoot.SetPtr(1, rightNode);
-    originalRoot.Serialize(buffercache, superblock.info.rootnode);
+    rc = originalRoot.SetKey(0, newKey);
+    if (rc) {return rc;}
+    rc = originalRoot.SetPtr(0, leftNode);
+    if (rc) {return rc;}
+    rc = originalRoot.SetPtr(1, rightNode);
+    if (rc) {return rc;}
+    rc = originalRoot.Serialize(buffercache, superblock.info.rootnode);
+    if (rc) {return rc;}
     return 0;
   }
   //Else: btree already exists: Must recurse through tree, find leaf to place value and see if splits are needed
@@ -427,51 +437,177 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   rc = recurse(superblock.info.rootnode, newKey, newValue, didsplit, left, right);
 
   return rc;
+
 }
 
-ERROR_T BTreeIndex::Interior_No_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right) {
-  BTreeNode b;
-  ERROR_T rc;
-  SIZE_T offset;
-  KEY_T currKey;
-  KEY_T oldKey;
-  SIZE_T oldPtr;
-  SIZE_T target;
-  rc = b.Unserialize(buffercache, node);
+ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right){
 
-  // Set offset to correct location in block
-  for (offset=0; offset<b.info.numkeys; offset++) {
-    rc = b.GetKey(offset, currKey);
-    if (rc) {return rc;}
-    if (key < currKey) {break;}
-  }
+     BTreeNode b;
+     ERROR_T rc;
+     SIZE_T offset;
+     KEY_T currKey;
+     SIZE_T ptr;
+     KEY_T oldKey;
+     VALUE_T oldValue;
+     SIZE_T oldPtr;
+     SIZE_T target;
 
-  // Move key/ptr pairs over in block
-  target = offset;
-  b.info.numkeys += 1;
-  for (offset=b.info.numkeys-1; offset>target; offset--) {
-    rc = b.GetKey(offset-1, oldKey);
-    if (rc) {return rc;}
-    rc = b.SetKey(offset, oldKey);
-    if (rc) {return rc;}
-    rc = b.GetPtr(offset, oldPtr);
-    if (rc) {return rc;}
-    rc = b.SetPtr(offset+1, oldPtr);
-    if (rc) {return rc;}
-    rc = b.GetPtr(offset-1, oldPtr);
-    if (rc) {return rc;}
-    rc = b.SetPtr(offset, oldPtr);
-    if (rc) {return rc;}
-  }
-  // Insert key/ptr into block
-  rc = b.SetKey(target, key);
-  if (rc) {return rc;}
-  rc = b.SetPtr(target+1, right);
-  if (rc) {return rc;}
-  rc = b.SetPtr(target, left);
-  if (rc) {return rc;}
-  return b.Serialize(buffercache, node);
+     rc - b.Unserialize(buffercache);
+
+     // Initialize our new node that we want to insert
+     BTreeNode newNode = b;
+
+     // Find where we need to split, create the new right node and allocate it
+     SIZE_T splitLoc = b.info.numkeys / 2;
+     SIZE_T newRightNode;
+     rc = AllocateNode(newRightNode);
+     if (rc) { return rc; }
+     b.GetKey(splitLoc, oldKey);
+
+     // runs if statement if we want to put it inside the left node
+     if (key < oldKey) {
+       newNode.info.numkeys = b.info.numkeys - splitLoc;
+       for (nOffset = splitLoc; nOffset < b.info.numkeys; nOffset++) {
+         // Transfer the Key
+         rc = b.GetKey(nOffset, oldKey);
+         if (rc) { return rc; }
+         rc = newNode.SetKey((nOffset-splitLoc), oldKey);
+         if (rc) { return rc; }
+         // Transfer the Ptr
+         rc = b.GetPtr(nOffset, oldPtr);
+         if (rc) { return rc; }
+         rc = newNode.setPtr((nOffset-splitLoc), oldPtr);
+         if (rc) { return rc; }
+         // update the next Ptr
+         rc. b.getPtr(nOffset+1, oldPtr);
+         if (rc) { return rc; }
+         rc = newNode.setPtr((nOffset-splitLoc+1), oldPtr);
+         if (rc) { return rc; }
+       }
+       // Insert the new right node
+       rc = newNode.Serialize(buffercache, newRightNode);
+       if (rc) { return rc; }
+       b.info.numkeys = splitLoc;
+
+       // Now we want to add the promoted node from below into the new split
+       for (offest = 0; offset < b.info.numkeys; offset--) {
+         rc = b.GetKey(offset, currKey);
+         if (rc) { return rc; }
+         if (key < thiskey) {
+           break;
+         }
+       }
+
+       // Now offset is the loc where we want to insert the key,
+       // but we need to shift everything after the target location
+       b.info.numkeys += 1;
+       target = offset;
+       for (offest = b.info.numkeys-1; offset > target; offest--) {
+         // Shift the key
+         rc = b.GetKey(offest-1, oldKey);
+         if (rc) { return rc; }
+         rc = b.SetKey(offset, oldKey);
+         if (rc) { return rc; }
+         // Shift the ptr
+         rc = b.GetPtr(offset, oldPtr);
+         if (rc) { return rc; }
+         rc = b.SetPtr(offset+1, oldPtr);
+         if (rc) { return rc; }
+         rc = b.GetPtr(offset-1, oldPtr);
+         if (rc) { return rc; }
+         rc = b.SetPtr(offset, oldPtr);
+         if (rc) { return rc; }
+       }
+       // Now that everything after is shifted, insert the new key
+       rc = b.SetKey(target, key);
+       if (rc) { return rc; }
+       rc = b.SetPtr(target+1, right);
+       if (rc) { return rc; }
+       rc = b.SetPtr(target, left);
+       if (rc) { return rc; }
+
+       // We need to account for edge case where inserted key is largest key
+       // in the left node
+       KEY_T insertKey
+       rc = b.GetKey(b.info.numkeys-1, insertKey);
+       if (rc) { return rc; }
+       if (insertKey == key) {
+         b.SetPtr(b.info.numkeys-1, left);
+         newNode.SetPtr(0, right);
+         newNode.Serialize(buffercache, newRightNode);
+       }
+       b.GetKey(b.info.numkeys-1, key)
+       left = node;
+       right = newRightNode;
+       b.info.numkeys--;
+       return b.Serialize(buffercache, node);
+     } else { // new key should be in the right after the split
+       newNode.info.numkeys = b.info.numkeys - splitLoc - 1;
+       temp = splitLoc + 1;
+       // write the new left node since it's the same
+       for (offset = splitLoc+1; offset < b.info.numkeys; offset++) {
+         rc = b.GetKey(offset, oldKey);
+         if (rc) { return rc; }
+         rc = newNode.SetKey((offset-temp), oldKey);
+         if (rc) { return rc; }
+         rc = b.GetPtr(offset, oldPtr);
+         if (rc) { return rc; }
+         rc = newNode.SetPtr((offset-temp), oldPtr);
+         if (rc) { return rc; }
+         rc = b.GetPtr((offset+1), oldPtr);
+         if (rc) { return rc; }
+         rc = newNode.SetPtr((offset-splitLoc), oldPtr);
+         if (rc) { return rc; }
+       }
+       b.info.numkeys = splitLoc + 1;
+
+       // now insert the key into the newNode
+       for (offset = 0; offset < newNode.info.numkeys; offset++) {
+         rc = newNode.GetKey(offset, currKey);
+         if (rc) { return rc; }
+         if (key < currKey) {
+           break; // we've found where we want to insert it
+         }
+       }
+       newNode.info.numkeys++;
+       target = offset;
+
+       // Like before, we now have to shift everything after it
+       for (offset = newNode.info.numkeys-1; offset > target; offset--) {
+         rc = newNode.GetKey(offset-1, oldKey);
+         if (rc) { return rc; }
+         rc = newNode.SetKey(offset, oldKey);
+         if (rc) { return rc; }
+         rc = newNode.GetPtr(offset, oldPtr);
+         if (rc) { return rc; }
+         rc = newNode.SetPtr(offset+1, oldPtr);
+         if (rc) { return rc; }
+         rc = newNode.GetPtr(offset-1, oldptr);
+         if (rc) { return rc; }
+         rc = newNode.SetPtr(offset, oldPtr);
+         if (rc) { return rc; }
+       }
+       // Now that everything is properly shifted, insert the new node
+       rc = newNode.SetKey(target, key);
+       if (rc) { return rc; }
+       rc = newNode.SetPtr(target, left);
+       if (rc) { return rc; }
+       rc = newNode.SetPtr(target+1, right);
+       if (rc) { return rc; }
+
+       rc = b.GetKey(b.info.numkeys-1, key);
+       if (rc) { return rc; }
+       b.info.numkeys--;
+       rc = b.Serialize(buffercache, node);
+       if (rc) { return rc; }
+       right = newRightNode;
+       left = node;
+       return newNode.Serialize(bufferchace, newRightNode);
+    }
 }
+
+
+
 
 ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &split, SIZE_T &left, SIZE_T &right){
   BTreeNode b;
@@ -484,10 +620,12 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
   VALUE_T oldValue;
   SIZE_T insertIndex;
 
+  bool found = false;
   SIZE_T paramNode = node;
   SIZE_T paramLeft = left;
   SIZE_T paramRight = right;
   KEY_T paramKey = key;
+
 
 
   rc = b.Unserialize(buffercache,node);
@@ -497,12 +635,15 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
   switch(b.info.nodetype){
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
+    if(b.info.numkeys <= 0){
+      return ERROR_INSANE;
+    }
     for(offset = 0; offset<b.info.numkeys;offset++){
       rc = b.GetKey(offset, currKey);
       if(rc){
         return rc;
       }
-      if(currKey > key || currKey == key){
+      if(key < currKey || currKey == key){
         rc=b.GetPtr(offset, currPtr);
         if(rc){
           return rc;
@@ -511,17 +652,13 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
         if(rc){
           return rc;
         }
-        //check here for split, otherwise just add key/val and done SPLIT?
-        if(split){
-          //do stuff
-        }
-        else{
-          return rc;
-        }
+        found = true;
+        break;
+
       }
     }//end of iterating through keys at currentnode
-    //Examine last pointer in case where keys exists. Because last choice, must take it
-    if(b.info.numkeys>0){
+    //Examine last pointer in case appropriate key not found. Because last choice, must take it
+    if(found == false){
       rc = b.GetPtr(b.info.numkeys, currPtr);
       if(rc){
         return rc;
@@ -530,20 +667,80 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
       if(rc){
         return rc;
       }
-      //check here for split SPLIT?
-      if(split){
-        //do stuff
+    }
+    //After recursing, split = 0 or 1
+    //check here for split, otherwise just add key/val and done SPLIT?
+    if(split){
+      //do stuff
+      //Cases: interior node dealing with leaf split
+      //interior node deals with leaf split and then must split itself as well
+      //root node must split because interior node split
+      //root node deals with interior split but is not full
+
+      //set split = 0 when split does not happen: means we can stop. New splits can cause more splits, however.
+      //if currently looking at int node after a split
+      if(b.info.nodetype == BTREE_INTERIOR_NODE){
+        if(b.info.numkeys < b.info.GetNumSlotsAsLeaf()){ //if interior node is not full
+          paramNode = node;
+          paramKey = key;
+          paramLeft = left;
+          paramRight = right;
+          rc = Interior_No_Split(paramNode, paramKey, paramLeft, paramRight);
+          node = paramNode;
+          key = paramKey;
+          left = paramLeft;
+          right = paramRight;
+          //Interior_No_Split
+          //Interior_Split
+          //Root_Split
+          split = 0;
+          return rc;
+        }
+        else{ //must split interior node as well
+          paramNode = node;
+          paramKey = key;
+          paramLeft = left;
+          paramRight = right;
+          rc = Interior_Split(paramNode, paramKey, paramLeft, paramRight);
+          node = paramNode;
+          key = paramKey;
+          left = paramLeft;
+          right = paramRight;
+          split = 1;
+          return rc;
+        }
       }
-      else{
-        return rc;
+      else{ //Looking at root node immediately after splitting something
+        if(b.info.numkeys < b.info.GetNumSlotsAsLeaf()){ //root is not full
+          paramNode = node;
+          paramKey = key;
+          paramLeft = left;
+          paramRight = right;
+          rc = Interior_No_Split(paramNode, paramKey, paramLeft, paramRight);
+          node = paramNode;
+          key = paramKey;
+          left = paramLeft;
+          right = paramRight;
+          split = 0;
+          return rc;
+        }
+        else{ //root is full, must split root.
+          paramNode = node;
+          paramKey = key;
+          paramLeft = left;
+          paramRight = right;
+          rc = Root_Split(paramNode, paramKey, paramLeft, paramRight);
+          split = 0; //Root was split, but no function call to handle so no point in setting to 1
+          return rc;
+        }
       }
     }
-    else{// 0 or fewer keys so doesn't exist
-      return ERROR_INSANE;
+    else{
+      return rc;
     }
     break;
-    
-    case: BTREE_LEAF_NODE:
+
+    case BTREE_LEAF_NODE:
     //leaf not full
     if(b.info.numkeys < b.info.GetNumSlotsAsLeaf()){
       for(offset = 0; offset<b.info.numkeys; offset++){
@@ -551,7 +748,7 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
         if(rc){
           return rc;
         }
-        if(currKey > key){ //we found the first key node that our insert key is greater than
+        if(key < currKey){ //we found the first key node that our insert key is greater than
           break;
         }
       }
@@ -562,7 +759,7 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
         if(rc){
           return rc;
         }
-        rc = b.GetVal(offset - 1; oldValue);
+        rc = b.GetVal(offset - 1, oldValue);
         if(rc){
           return rc;
         }
@@ -595,8 +792,9 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
       }
       BTreeNode newNode = b;
       SIZE_T mid = b.info.numkeys / 2;
-      b.GetKey(mid, oldKey); //key value at middle, see if new key is before or after
-      if(key < oldkey){ //before
+      rc = b.GetKey(mid, oldKey); //key value at middle, see if new key is before or after
+      if(rc){return rc;}
+      if(key < oldKey){ //before
         newNode.info.numkeys = b.info.numkeys - mid;
         for(offset = mid; offset < b.info.numkeys; offset++){ //create right node and serialize
           rc = b.GetKey(offset, oldKey);
@@ -627,13 +825,13 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
           if(rc){
             return rc;
           }
-          if(currKey > key){ //found first key greater than insert key
+          if(key < currKey){ //found first key greater than insert key
             insertIndex = offset;
             break;
           }
         }
         b.info.numkeys++; //adding another key
-        for(offset = b.info.numkeys - 1; offset > insertIndex; offset--;){//copy elements forward
+        for(offset = b.info.numkeys - 1; offset > insertIndex; offset--){//copy elements forward
           rc = b.GetKey(offset-1, oldKey);
           if(rc){
             return rc;
@@ -692,7 +890,7 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
           if(rc){
             return rc;
           }
-          if(currKey > key){
+          if(key < currKey){
             insertIndex = offset;
             break;
           }
@@ -836,9 +1034,72 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 ERROR_T BTreeIndex::SanityCheck() const
 {
   // WRITE ME
-  return ERROR_UNIMPL;
-}
+  BTreeNode root;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T currKey;
+  SIZE_T currPtr;
+  KEY_T prevKey;
+  rc = root.Unserialize(buffercache, superblock.info.rootnode);
+  if(rc){return rc;}
+  rc = root.GetKey(0, prevKey);
+  if(rc){return rc;}
+  for(offset = 1; offset<root.info.numkeys;offset++){
+    rc = root.GetKey(offset, currKey);
+    if(rc){return rc;}
+    rc = root.GetPtr(offset, currPtr);
+    if(rc){return rc;}
+    if(prevKey == currKey || !(prevKey < currKey)){
+      return ERROR_BADCONFIG;
+    }
+    rc = root.GetKey(offset, prevKey);
+    if(rc){return rc;}
+  }
+  for(offset = 0; offset < root.info.numkeys; offset++){
+    rc = root.GetPtr(offset, currPtr);
+    if(rc){return rc;}
+    rc = SanityDfs(currPtr);
 
+  }
+
+  return ERROR_NOERROR;
+
+
+}
+ERROR_T BTreeIndex::SanityDfs(SIZE_T &node) const
+{
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T currKey;
+  SIZE_T currPtr;
+  KEY_T prevKey;
+
+  rc = b.Unserialize(buffercache, node);
+  if(rc){return rc;}
+
+  if(b.info.numkeys == 0){
+    return ERROR_NOERROR;
+  }
+  rc = root.GetKey(0, prevKey);
+  if(rc){return rc;}
+  for(offset = 1; offset<b.info.numkeys;offset++){
+    rc = b.GetKey(offset, currKey);
+    if(rc){return rc;}
+    rc = b.GetPtr(offset, currPtr);
+    if(rc){return rc;}
+    if(prevKey == currKey || !(prevKey < currKey)){
+      return ERROR_BADCONFIG;
+    }
+    rc = b.GetKey(offset, prevKey);
+    if(rc){return rc;}
+  }
+  for(offset = 0; offset < b.info.numkeys; offset++){
+    rc = b.GetPtr(offset, currPtr);
+    if(rc){return rc;}
+    return SanityDfs(currPtr);
+  }
+}
 
 
 ostream & BTreeIndex::Print(ostream &os) const
