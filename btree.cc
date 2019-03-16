@@ -607,6 +607,233 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
 }
 
 
+ERROR_T BTreeIndex::Interior_No_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right) {
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T currKey;
+  KEY_T oldKey;
+  SIZE_T oldPtr;
+  SIZE_T target;
+  rc = b.Unserialize(buffercache, node);
+
+  // Set offset to correct location in block
+  for (offset=0; offset<b.info.numkeys; offset++) {
+    rc = b.GetKey(offset, currKey);
+    if (rc) {return rc;}
+    if (key < currKey) {
+      target = offset;
+      break;
+    }
+  }
+
+  // Move key/ptr pairs over in block
+  b.info.numkeys += 1;
+  for (offset=b.info.numkeys-1; offset>target; offset--) {
+    rc = b.GetKey(offset-1, oldKey);
+    if (rc) {return rc;}
+    rc = b.SetKey(offset, oldKey);
+    if (rc) {return rc;}
+    rc = b.GetPtr(offset, oldPtr);
+    if (rc) {return rc;}
+    rc = b.SetPtr(offset+1, oldPtr);
+    if (rc) {return rc;}
+    rc = b.GetPtr(offset-1, oldPtr);
+    if (rc) {return rc;}
+    rc = b.SetPtr(offset, oldPtr);
+    if (rc) {return rc;}
+  }
+  // Insert key into block
+  rc = b.SetKey(target, key);
+  if (rc) {return rc;}
+  rc = b.SetPtr(target, left);
+  if (rc) {return rc;}
+  rc = b.SetPtr(target+1, right);
+  if (rc) {return rc;}
+  return b.Serialize(buffercache, node);
+}
+
+
+
+
+ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right) {
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T currKey;
+  SIZE_T currPtr;
+  KEY_T oldKey;
+  SIZE_T oldPtr;
+  VALUE_T oldValue;
+  SIZE_T target;
+  rc = b.Unserialize(buffercache, node);
+
+  // Create new root node, initialized to old root values
+  BTreeNode root = b;
+  // Create new interior node
+  b.info.nodetype = BTREE_INTERIOR_NODE;
+  BTreeNode newNode = b;
+
+  // Get middle of old root, to be split into left and right
+  SIZE_T midpoint = b.in.numkeys/2;
+  SIZE_T newLeft;
+  SIZE_T newRight;
+  rc = AllocateNode(newLeft);
+  if (rc) {return rc;}
+  rc = AllocateNode(newRight);
+  if (rc) {return rc;}
+
+  // Find whether to put new key in left or right
+  b.GetKey(midpoint, oldKey);
+
+  // Case 1: Key less than oldKey; key goes in left
+  if (key < oldKey) {
+    newNode.info.numkeys = b.info.numkeys - midpoint;
+    // Set up right node: last half of original
+    for (offset = midpoint; offset<b.info.numkeys; offset++) {
+      rc = b.GetKey(offset, oldKey);
+      if (rc) {return rc;}
+      rc = newNode.SetKey(offset-midpoint, oldKey);
+      if (rc) {return rc;}
+      rc = b.GetPtr(offset, oldKey);
+      if (rc) {return rc;}
+      rc = newNode.SetPtr(offset-midpoint, oldPtr);
+      if (rc) {return rc;}
+      rc = b.GetPtr(offset+1, oldPtr);
+      if (rc) {return rc;}
+      rc = newNode.SetPtr(offset-midpoint+1, oldPtr);
+      if (rc) {return rc;}
+    }
+    rc = newNode.Serialize(buffercache, newRight);
+    if (rc) {return rc;}
+
+    // Set up left node: first half of original + promoted key
+    newNode.info.numkeys = midpoint;
+    // Find location in node to insert key
+    for (offset=0; offset<newNode.info.numkeys; offset++) {
+      rc = b.GetKey(offset, currKey);
+      if (rc) {return rc;}
+      if (key < currKey) {
+        target = offset;
+        break;
+      }
+    }
+    b.info.numkeys += 1;
+    for (offset=b.info.numkeys-1; offset>target; offset--) {
+      rc = b.GetKey(offset-1, oldKey);
+      if (rc) {return rc;}
+      rc = b.SetKey(offset, oldKey);
+      if (rc) {return rc;}
+      rc = b.GetPtr(offset, oldPtr);
+      if (rc) {return rc;}
+      rc = b.SetPtr(offset+1, oldPtr);
+      if (rc) {return rc;}
+      rc = b.GetPtr(offset-1, oldPtr);
+      if (rc) {return rc;}
+      rc = b.SetPtr(offset, oldPtr);
+      if (rc) {return rc;}
+    }
+    // Insert promoted key
+    rc = b.SetKey(target, key);
+    if (rc) {return rc;}
+    rc = b.SetPtr(target, left);
+    if (rc) {return rc;}
+    rc = b.SetPtr(target+1, right);
+    if (rc) {return rc;}
+    // Special case: if promoted key is largest in left node (becoming root)
+    KEY_T check;
+    b.GetKey(b.info.numkeys-1, check);
+    if (key == check) {
+      newNode.SetPtr(0, right);
+      newNode.Serialize(buffercache, newRight);
+      b.SetPtr(b.info.numkeys-1, left);
+    }
+
+    // Set up new root with key to be promoted
+    KEY_T rootkey;
+    b.GetKey(b.info.numkeys-1, rootkey);
+    b.info.numkeys -= 1;
+    rc = b.Serialize(buffercache, newLeft);
+    if (rc) {return rc;}
+    root.info.numkeys = 1;
+    root.SetKey(0, rootkey);
+    root.SetPtr(0, newLeft);
+    root.SetPtr(1, newRight);
+    return root.Serialize(buffercache, superblock.info.rootnode);
+  }
+
+  // Case 2: Key goes in right node
+  else {
+    // Set up right node
+    // Move key/ptr pairs over
+    newNode.info.numkeys = b.info.numkeys - midpoint - 1;
+    for (offset=midpoint+1; offset<b.info.numkeys; offset++) {
+      rc = b.GetKey(offset, oldKey);
+      if (rc) {return rc;}
+      rc = newNode.SetKey(offset-midpoint-1, oldKey);
+      if (rc) {return rc;}
+      rc = b.GetPtr(offset, oldPtr);
+      if (rc) {return rc;}
+      rc = newNode.SetPtr(offset-midpoint-1, oldPtr);
+      if (rc) {return rc;}
+      rc = b.GetPtr(offset+1, oldPtr);
+      if (rc) {return rc;}
+      rc = newNode.SetPtr(offset-midpoint, oldPtr);
+      if (rc) {return rc;}
+    }
+    // Find location in node to insert key
+    for (offset=0; offset<newNode.info.numkeys; offset++) {
+      rc = newNode.GetKey(offset, currKey);
+      if (rc) {return rc;}
+      if (key < currKey) {
+        target = offset;
+        break;
+      }
+    }
+    // Update node, shift to make room for inserted key
+    newNode.info.numkeys += 1;
+    for (offset=newNode.info.numkeys-1; offset>target; offset--) {
+      rc = newNode.GetKey(offset-1, oldKey);
+      if (rc) {return rc;}
+      rc = newNode.SetKey(offset, oldKey);
+      if (rc) {return rc;}
+      rc = newNode.GetPtr(offset, oldPtr);
+      if (rc) {return rc;}
+      rc = newNode.SetPtr(offset+1, oldPtr);
+      if (rc) {return rc;}
+      rc = newNode.GetPtr(offset-1, oldPtr);
+      if (rc) {return rc;}
+      rc = newNode.SetPtr(offset, oldPtr);
+      if (rc) {return rc;}
+    }
+    // Insert key
+    rc = newNode.SetKey(target, key);
+    rc = newNode.SetPtr(target+1, right);
+    if (rc) {return rc;}
+    rc = newNode.SetPtr(target, left);
+    if (rc) {return rc;}
+    // Serialize right node
+    rc = newNode.Serialize(buffercache, newRight);
+    if (rc) {return rc;}
+
+    // Set up left node: first half of original node
+    b.info.numkeys = midpoint + 1;
+    // Get key to promote
+    KEY_T rootkey;
+    b.GetKey(b.info.numkeys-1, rootkey);
+    b.info.numkeys -= 1;
+    rc = b.Serialize(buffercache, newLeft)
+
+    // Update root
+    root.info.numkeys = 1;
+    root.SetKey(0, rootkey);
+    root.SetPtr(0, newLeft);
+    root.SetPtr(1, newRight);
+    return root.Serialize(buffercache, superblock.info.rootnode);
+  }
+  return ERROR_INSANE;
+}
+
 
 
 ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &split, SIZE_T &left, SIZE_T &right){
