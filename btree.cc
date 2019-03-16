@@ -622,11 +622,10 @@ ERROR_T BTreeIndex::Interior_No_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SI
     rc = b.GetKey(offset, currKey);
     if (rc) {return rc;}
     if (key < currKey) {
-      target = offset;
       break;
     }
   }
-
+  target = offset;
   // Move key/ptr pairs over in block
   b.info.numkeys += 1;
   for (offset=b.info.numkeys-1; offset>target; offset--) {
@@ -709,10 +708,10 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
       rc = b.GetKey(offset, currKey);
       if (rc) {return rc;}
       if (key < currKey) {
-        target = offset;
         break;
       }
     }
+    target = offset;
     b.info.numkeys += 1;
     for (offset=b.info.numkeys-1; offset>target; offset--) {
       rc = b.GetKey(offset-1, oldKey);
@@ -781,10 +780,10 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
       rc = newNode.GetKey(offset, currKey);
       if (rc) {return rc;}
       if (key < currKey) {
-        target = offset;
         break;
       }
     }
+    target = offset;
     // Update node, shift to make room for inserted key
     newNode.info.numkeys += 1;
     for (offset=newNode.info.numkeys-1; offset>target; offset--) {
