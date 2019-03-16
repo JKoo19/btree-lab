@@ -1301,7 +1301,7 @@ ERROR_T BTreeIndex::SanityDfs(SIZE_T &node) const
   if(b.info.numkeys == 0){
     return ERROR_NOERROR;
   }
-  rc = root.GetKey(0, prevKey);
+  rc = b.GetKey(0, prevKey);
   if(rc){return rc;}
   for(offset = 1; offset<b.info.numkeys;offset++){
     rc = b.GetKey(offset, currKey);
