@@ -427,7 +427,50 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   rc = recurse(superblock.info.rootnode, newKey, newValue, didsplit, left, right);
 
   return rc;
+}
 
+ERROR_T BTreeIndex::Interior_No_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right) {
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T currKey;
+  KEY_T oldKey;
+  SIZE_T oldPtr;
+  SIZE_T target;
+  rc = b.Unserialize(buffercache, node);
+
+  // Set offset to correct location in block
+  for (offset=0; offset<b.info.numkeys; offset++) {
+    rc = b.GetKey(offset, currKey);
+    if (rc) {return rc;}
+    if (key < currKey) {break;}
+  }
+
+  // Move key/ptr pairs over in block
+  target = offset;
+  b.info.numkeys += 1;
+  for (offset=b.info.numkeys-1; offset>target; offset--) {
+    rc = b.GetKey(offset-1, oldKey);
+    if (rc) {return rc;}
+    rc = b.SetKey(offset, oldKey);
+    if (rc) {return rc;}
+    rc = b.GetPtr(offset, oldPtr);
+    if (rc) {return rc;}
+    rc = b.SetPtr(offset+1, oldPtr);
+    if (rc) {return rc;}
+    rc = b.GetPtr(offset-1, oldPtr);
+    if (rc) {return rc;}
+    rc = b.SetPtr(offset, oldPtr);
+    if (rc) {return rc;}
+  }
+  // Insert key/ptr into block
+  rc = b.SetKey(target, key);
+  if (rc) {return rc;}
+  rc = b.SetPtr(target+1, right);
+  if (rc) {return rc;}
+  rc = b.SetPtr(target, left);
+  if (rc) {return rc;}
+  return b.Serialize(buffercache, node);
 }
 
 ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &split, SIZE_T &left, SIZE_T &right){
