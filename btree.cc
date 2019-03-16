@@ -690,7 +690,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
       if (rc) {return rc;}
       rc = newNode.SetKey(offset-midpoint, oldKey);
       if (rc) {return rc;}
-      rc = b.GetPtr(offset, oldKey);
+      rc = b.GetPtr(offset, oldPtr);
       if (rc) {return rc;}
       rc = newNode.SetPtr(offset-midpoint, oldPtr);
       if (rc) {return rc;}
@@ -817,7 +817,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
     KEY_T rootkey;
     b.GetKey(b.info.numkeys-1, rootkey);
     b.info.numkeys -= 1;
-    rc = b.Serialize(buffercache, newLeft)
+    rc = b.Serialize(buffercache, newLeft);
 
     // Update root
     root.info.numkeys = 1;
