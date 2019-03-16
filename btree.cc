@@ -1135,7 +1135,17 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
           }
         }
         rc = newNode.SetVal(insertIndex, value);
+        if(rc){
+          return rc;
+        }
         rc = newNode.SetKey(insertIndex, key);
+        if(rc){
+
+
+
+
+          return rc;
+        }
         b.GetKey(b.info.numkeys-1, key); //changing key to greatest val in left
         return newNode.Serialize(buffercache, right);
 
