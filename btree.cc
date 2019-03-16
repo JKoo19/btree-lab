@@ -653,9 +653,6 @@ ERROR_T BTreeIndex::Interior_No_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SI
   return b.Serialize(buffercache, node);
 }
 
-
-
-
 ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right) {
   BTreeNode b;
   ERROR_T rc;
@@ -667,7 +664,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
   VALUE_T oldValue;
   SIZE_T target;
   rc = b.Unserialize(buffercache, node);
-
+  
   // Create new root node, initialized to old root values
   BTreeNode root = b;
   // Create new interior node
@@ -675,7 +672,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
   BTreeNode newNode = b;
 
   // Get middle of old root, to be split into left and right
-  SIZE_T midpoint = b.in.numkeys/2;
+  SIZE_T midpoint = b.info.numkeys/2; 
   SIZE_T newLeft;
   SIZE_T newRight;
   rc = AllocateNode(newLeft);
@@ -685,13 +682,13 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
 
   // Find whether to put new key in left or right
   b.GetKey(midpoint, oldKey);
-
+  
   // Case 1: Key less than oldKey; key goes in left
   if (key < oldKey) {
     newNode.info.numkeys = b.info.numkeys - midpoint;
     // Set up right node: last half of original
     for (offset = midpoint; offset<b.info.numkeys; offset++) {
-      rc = b.GetKey(offset, oldKey);
+      rc = b.GetKey(offset, oldKey); 
       if (rc) {return rc;}
       rc = newNode.SetKey(offset-midpoint, oldKey);
       if (rc) {return rc;}
@@ -804,7 +801,7 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
       rc = newNode.GetPtr(offset-1, oldPtr);
       if (rc) {return rc;}
       rc = newNode.SetPtr(offset, oldPtr);
-      if (rc) {return rc;}
+      if (rc) {return rc;} 
     }
     // Insert key
     rc = newNode.SetKey(target, key);
@@ -833,8 +830,6 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
   }
   return ERROR_INSANE;
 }
-
-
 
 ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &split, SIZE_T &left, SIZE_T &right){
   BTreeNode b;
