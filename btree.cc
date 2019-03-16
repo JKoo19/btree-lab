@@ -658,10 +658,8 @@ ERROR_T BTreeIndex::Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &r
   ERROR_T rc;
   SIZE_T offset;
   KEY_T currKey;
-  SIZE_T currPtr;
   KEY_T oldKey;
   SIZE_T oldPtr;
-  VALUE_T oldValue;
   SIZE_T target;
   rc = b.Unserialize(buffercache, node);
 
