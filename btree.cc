@@ -490,7 +490,7 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
        b.info.numkeys = splitLoc;
 
        // Now we want to add the promoted node from below into the new split
-       for (offset = 0; offset < b.info.numkeys; offset--) {
+       for (offset = 0; offset < b.info.numkeys; offset++) {
          rc = b.GetKey(offset, currKey);
          if (rc) { return rc; }
          if (key < currKey) {
@@ -500,8 +500,9 @@ ERROR_T BTreeIndex::Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_
 
        // Now offset is the loc where we want to insert the key,
        // but we need to shift everything after the target location
-       b.info.numkeys += 1;
        target = offset;
+       b.info.numkeys += 1;
+
        for (offset = b.info.numkeys-1; offset > target; offset--) {
          // Shift the key
          rc = b.GetKey(offset-1, oldKey);
@@ -1045,10 +1046,10 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
             return rc;
           }
           if(key < currKey){ //found first key greater than insert key
-            insertIndex = offset;
             break;
           }
         }
+        insertIndex = offset;
         b.info.numkeys++; //adding another key
         for(offset = b.info.numkeys - 1; offset > insertIndex; offset--){//copy elements forward
           rc = b.GetKey(offset-1, oldKey);
@@ -1110,10 +1111,10 @@ ERROR_T BTreeIndex::recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &spli
             return rc;
           }
           if(key < currKey){
-            insertIndex = offset;
             break;
           }
         }
+        insertIndex = offset;
         newNode.info.numkeys += 1; //adding new key
         for(offset = newNode.info.numkeys - 1; offset > insertIndex; offset--){
           rc = newNode.GetKey(offset-1, oldKey);
