@@ -67,7 +67,7 @@ class BTreeIndex {
   ERROR_T      recurse(SIZE_T &node, KEY_T &key, VALUE_T &value, bool &split, SIZE_T &left, SIZE_T &right);
 
 
-  ERROR_T     SanityDfs(SIZE_T &node);
+  ERROR_T     SanityDfs(SIZE_T &node) const;
 
   ERROR_T     Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right);
 
