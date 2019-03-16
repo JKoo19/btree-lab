@@ -71,7 +71,11 @@ class BTreeIndex {
 
   ERROR_T     Interior_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right);
 
-//  ERROR_T     
+  ERROR_T     Root_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right);
+
+  ERROR_T     Interior_No_Split(SIZE_T &node, KEY_T &key, SIZE_T &left, SIZE_T &right);
+
+//  ERROR_T
 public:
   //
   // keysize and valueszie should be stored in the
